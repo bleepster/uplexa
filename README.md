@@ -190,7 +190,7 @@ Tested on a Raspberry Pi Zero with a clean install of minimal Raspbian Stretch (
 ```
 	sudo /etc/init.d/dphys-swapfile stop  
 	sudo nano /etc/dphys-swapfile  
-	CONF_SWAPSIZE=1024  
+	CONF_SWAPSIZE=2048
 	sudo /etc/init.d/dphys-swapfile start  
 ```
 
@@ -225,7 +225,7 @@ If you are using the older Raspbian Jessie image, compiling uPlexa is a bit more
 ```
 	sudo /etc/init.d/dphys-swapfile stop  
 	sudo nano /etc/dphys-swapfile  
-	CONF_SWAPSIZE=1024  
+	CONF_SWAPSIZE=2048  
 	sudo /etc/init.d/dphys-swapfile start  
 ```
 
