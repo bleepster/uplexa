@@ -86,6 +86,10 @@ inline void throw1(const T &e)
 
 #define MDB_val_set(var, val)   MDB_val var = {sizeof(val), (void *)&val}
 
+#define MDB_val_sized(var, val) MDB_val var = {val.size(), (void *)val.data()}
+
+#define MDB_val_str(var, val) MDB_val var = {strlen(val) + 1, (void *)val}
+
 template<typename T>
 struct MDB_val_copy: public MDB_val
 {
@@ -715,7 +719,8 @@ void BlockchainLMDB::add_block(const block& blk, size_t block_weight, const diff
   CURSOR(block_info)
 
   // this call to mdb_cursor_put will change height()
-  MDB_val_copy<blobdata> blob(block_to_blob(blk));
+  cryptonote::blobdata block_blob(block_to_blob(blk));
+  MDB_val_sized(blob, block_blob);
   result = mdb_cursor_put(m_cur_blocks, &key, &blob, MDB_APPEND);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to add block blob to db transaction: ", result).c_str()));
@@ -829,7 +834,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
     throw0(DB_ERROR(lmdb_error("Failed to add tx data to db transaction: ", result).c_str()));
 
   cryptonote::blobdata blob = tx_to_blob(tx);
-  MDB_val_copy<blobdata> blobval(blob);
+  MDB_val_sized(blobval, blob);
 
   std::stringstream ss;
   binary_archive<true> ba(ss);
@@ -837,7 +842,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   if (!r)
     throw0(DB_ERROR("Failed to serialize pruned tx"));
   std::string pruned = ss.str();
-  MDB_val_copy<blobdata> pruned_blob(pruned);
+  MDB_val_sized(pruned_blob, pruned);
   result = mdb_cursor_put(m_cur_txs_pruned, &val_tx_id, &pruned_blob, MDB_APPEND);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to add pruned tx blob to db transaction: ", result).c_str()));
@@ -845,7 +850,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   if (pruned.size() > blob.size())
     throw0(DB_ERROR("pruned tx size is larger than tx size"));
   cryptonote::blobdata prunable(blob.data() + pruned.size(), blob.size() - pruned.size());
-  MDB_val_copy<blobdata> prunable_blob(prunable);
+  MDB_val_sized(prunable_blob, prunable);
   result = mdb_cursor_put(m_cur_txs_prunable, &val_tx_id, &prunable_blob, MDB_APPEND);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to add prunable tx blob to db transaction: ", result).c_str()));
@@ -1332,7 +1337,7 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
 
   bool compatible = true;
 
-  MDB_val_copy<const char*> k("version");
+  MDB_val_str(k, "version");
   MDB_val v;
   auto get_result = mdb_get(txn, m_properties, &k, &v);
   if(get_result == MDB_SUCCESS)
@@ -1380,7 +1385,7 @@ void BlockchainLMDB::open(const std::string& filename, const int db_flags)
     // only write version on an empty DB
     if (m_height == 0)
     {
-      MDB_val_copy<const char*> k("version");
+      MDB_val_str(k, "version");
       MDB_val_copy<uint32_t> v(VERSION);
       auto put_result = mdb_put(txn, m_properties, &k, &v, 0);
       if (put_result != MDB_SUCCESS)
@@ -1477,7 +1482,7 @@ void BlockchainLMDB::reset()
     throw0(DB_ERROR(lmdb_error("Failed to drop m_properties: ", result).c_str()));
 
   // init with current version
-  MDB_val_copy<const char*> k("version");
+  MDB_val_str(k, "version");
   MDB_val_copy<uint32_t> v(VERSION);
   if (auto result = mdb_put(txn, m_properties, &k, &v, 0))
     throw0(DB_ERROR(lmdb_error("Failed to write version to database: ", result).c_str()));
@@ -1609,7 +1614,7 @@ void BlockchainLMDB::add_txpool_tx(const crypto::hash &txid, const cryptonote::b
     else
       throw1(DB_ERROR(lmdb_error("Error adding txpool tx metadata to db transaction: ", result).c_str()));
   }
-  MDB_val_copy<cryptonote::blobdata> blob_val(blob);
+  MDB_val_sized(blob_val, blob);
   if (auto result = mdb_cursor_put(m_cur_txpool_blob, &k, &blob_val, MDB_NODUPDATA)) {
     if (result == MDB_KEYEXIST)
       throw1(DB_ERROR("Attempting to add txpool tx blob that's already in the db"));
@@ -4062,7 +4067,7 @@ void BlockchainLMDB::migrate_0_1()
   uint32_t version = 1;
   v.mv_data = (void *)&version;
   v.mv_size = sizeof(version);
-  MDB_val_copy<const char *> vk("version");
+  MDB_val_str(vk, "version");
   result = mdb_txn_begin(m_env, NULL, 0, txn);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
@@ -4204,7 +4209,7 @@ void BlockchainLMDB::migrate_1_2()
   uint32_t version = 2;
   v.mv_data = (void *)&version;
   v.mv_size = sizeof(version);
-  MDB_val_copy<const char *> vk("version");
+  MDB_val_str(vk, "version");
   result = mdb_txn_begin(m_env, NULL, 0, txn);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
@@ -4339,7 +4344,7 @@ void BlockchainLMDB::migrate_2_3()
   uint32_t version = 3;
   v.mv_data = (void *)&version;
   v.mv_size = sizeof(version);
-  MDB_val_copy<const char *> vk("version");
+  MDB_val_str(vk, "version");
   result = mdb_txn_begin(m_env, NULL, 0, txn);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
